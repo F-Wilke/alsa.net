@@ -48,27 +48,27 @@ namespace Iot.Device.Media
         /// Play WAV file.
         /// </summary>
         /// <param name="wavPath">WAV file path.</param>
-        public abstract void Play(string wavPath);
+        public abstract void Play(string wavPath, bool headerIncluded = true);
 
         /// <summary>
         /// Play WAV file.
         /// </summary>
         /// <param name="wavStream">WAV stream.</param>
-        public abstract void Play(Stream wavStream);
+        public abstract void Play(Stream wavStream, bool headerIncluded = true);
 
         /// <summary>
         /// Sound recording.
         /// </summary>
         /// <param name="second">Recording duration(In seconds).</param>
         /// <param name="savePath">Recording save path.</param>
-        public abstract void Record(uint second, string savePath);
+        public abstract void Record(uint second, string savePath, bool includeHeader = true);
 
         /// <summary>
         /// Sound recording.
         /// </summary>
         /// <param name="second">Recording duration(In seconds).</param>
         /// <param name="saveStream">Recording save stream.</param>
-        public abstract void Record(uint second, Stream saveStream);
+        public abstract void Record(uint second, Stream saveStream, bool includeHeader = true);
 
         /// <inheritdoc/>
         public void Dispose()

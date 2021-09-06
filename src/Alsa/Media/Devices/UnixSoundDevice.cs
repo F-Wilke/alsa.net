@@ -92,26 +92,51 @@ namespace Iot.Device.Media
         /// Play WAV file.
         /// </summary>
         /// <param name="wavPath">WAV file path.</param>
-        public override void Play(string wavPath)
+        public override void Play(string wavPath, bool headerIncluded=true)
         {
             using FileStream fs = File.Open(wavPath, FileMode.Open);
 
-            Play(fs);
+            Play(fs, headerIncluded);
         }
 
         /// <summary>
         /// Play WAV file.
         /// </summary>
         /// <param name="wavStream">WAV stream.</param>
-        public override void Play(Stream wavStream)
+        public override void Play(Stream wavStream, bool headerIncluded = true)
         {
             IntPtr @params = new IntPtr();
             int dir = 0;
-            WavHeader header = GetWavHeader(wavStream);
+            WavHeader header;
+
+            if (headerIncluded)
+            {
+                header = GetWavHeader(wavStream);
+            }
+            else
+            {
+                header = new WavHeader
+                {
+                    ChunkId = new[] { 'R', 'I', 'F', 'F' },
+                    ChunkSize = (uint)(wavStream.Length + 44),
+                    Format = new[] { 'W', 'A', 'V', 'E' },
+                    Subchunk1ID = new[] { 'f', 'm', 't', ' ' },
+                    Subchunk1Size = 16,
+                    AudioFormat = 1,
+                    NumChannels = Settings.RecordingChannels,
+                    SampleRate = Settings.RecordingSampleRate,
+                    ByteRate = Settings.RecordingSampleRate * Settings.RecordingBitsPerSample * Settings.RecordingChannels / 8,
+                    BlockAlign = (ushort)(Settings.RecordingBitsPerSample * Settings.RecordingChannels / 8),
+                    BitsPerSample = Settings.RecordingBitsPerSample,
+                    Subchunk2Id = new[] { 'd', 'a', 't', 'a' },
+                    Subchunk2Size = (uint)wavStream.Length
+                };
+
+            }
 
             OpenPlaybackPcm();
             PcmInitialize(_playbackPcm, header, ref @params, ref dir);
-            WriteStream(wavStream, header, ref @params, ref dir);
+            WriteStream(wavStream, header, ref @params, ref dir, headerIncluded);
             ClosePlaybackPcm();
         }
 
@@ -120,11 +145,11 @@ namespace Iot.Device.Media
         /// </summary>
         /// <param name="second">Recording duration(In seconds).</param>
         /// <param name="savePath">Recording save path.</param>
-        public override void Record(uint second, string savePath)
+        public override void Record(uint second, string savePath, bool includeHeader = true)
         {
             using FileStream fs = File.Open(savePath, FileMode.Create);
 
-            Record(second, fs);
+            Record(second, fs, includeHeader);
         }
 
         /// <summary>
@@ -132,7 +157,7 @@ namespace Iot.Device.Media
         /// </summary>
         /// <param name="second">Recording duration(In seconds).</param>
         /// <param name="saveStream">Recording save stream.</param>
-        public override void Record(uint second, Stream saveStream)
+        public override void Record(uint second, Stream saveStream, bool includeHeader = true)
         {
             IntPtr @params = new IntPtr();
             int dir = 0;
@@ -153,11 +178,14 @@ namespace Iot.Device.Media
                 Subchunk2Size = second * Settings.RecordingSampleRate * Settings.RecordingBitsPerSample * Settings.RecordingChannels / 8
             };
 
-            SetWavHeader(saveStream, header);
+            if (includeHeader)
+            {
+                SetWavHeader(saveStream, header);
+            }
 
             OpenRecordingPcm();
             PcmInitialize(_recordingPcm, header, ref @params, ref dir);
-            ReadStream(saveStream, header, ref @params, ref dir);
+            ReadStream(saveStream, header, ref @params, ref dir, includeHeader);
             CloseRecordingPcm();
         }
 
@@ -273,7 +301,7 @@ namespace Iot.Device.Media
             return header;
         }
 
-        private unsafe void WriteStream(Stream wavStream, WavHeader header, ref IntPtr @params, ref int dir)
+        private unsafe void WriteStream(Stream wavStream, WavHeader header, ref IntPtr @params, ref int dir, bool headerIncluded=true)
         {
             ulong frames, bufferSize;
 
@@ -287,7 +315,8 @@ namespace Iot.Device.Media
             // In Interop, the frames is defined as ulong. But actucally, the value of bufferSize won't be too big.
             byte[] readBuffer = new byte[(int)bufferSize];
             // Jump wav header.
-            wavStream.Position = 44;
+            if (headerIncluded)
+                wavStream.Position = 44;
 
             fixed (byte* buffer = readBuffer)
             {
@@ -299,7 +328,7 @@ namespace Iot.Device.Media
             }
         }
 
-        private unsafe void ReadStream(Stream saveStream, WavHeader header, ref IntPtr @params, ref int dir)
+        private unsafe void ReadStream(Stream saveStream, WavHeader header, ref IntPtr @params, ref int dir, bool includeHeader=true)
         {
             ulong frames, bufferSize;
 
@@ -311,7 +340,9 @@ namespace Iot.Device.Media
 
             bufferSize = frames * header.BlockAlign;
             byte[] readBuffer = new byte[(int)bufferSize];
-            saveStream.Position = 44;
+            
+            if (includeHeader)
+                saveStream.Position = 44;
 
             fixed (byte* buffer = readBuffer)
             {
